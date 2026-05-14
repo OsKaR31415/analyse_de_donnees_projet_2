@@ -1,0 +1,6 @@
+numpy
+pandas
+pyarrow
+plotly
+jupyter
+jupyter-cache
