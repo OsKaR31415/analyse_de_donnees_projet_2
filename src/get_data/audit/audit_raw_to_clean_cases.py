@@ -1,4 +1,4 @@
-"""
+﻿"""
 Audit raw-to-clean row correspondence.
 
 This validates that every raw candidate vote case corresponds to exactly one
@@ -28,7 +28,7 @@ from pathlib import Path
 import pandas as pd
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 RAW_DIR = PROJECT_ROOT / "data" / "raw"
 CLEAN_DIR = PROJECT_ROOT / "data" / "clean"
 AUDIT_DIR = PROJECT_ROOT / "data" / "audit"

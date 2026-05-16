@@ -1,4 +1,4 @@
-"""
+﻿"""
 Build final clean election result tables.
 
 Inputs:
@@ -17,7 +17,7 @@ import re
 import pandas as pd
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 CLEAN_DIR = PROJECT_ROOT / "data" / "clean"
 MANIFEST_DIR = PROJECT_ROOT / "data" / "manifest"
 

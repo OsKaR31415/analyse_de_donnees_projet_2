@@ -1,6 +1,6 @@
-"""
-Lire les datasets des élections législatives, européennes, présidentielles,
-régionales et municipales depuis 2000.
+﻿"""
+Lire les datasets des Ã©lections lÃ©gislatives, europÃ©ennes, prÃ©sidentielles,
+rÃ©gionales et municipales depuis 2000.
 """
 
 from pathlib import Path
@@ -9,7 +9,8 @@ import urllib.error
 import pandas as pd
 
 
-DATA_DIR = Path("data/raw")
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DATA_DIR = PROJECT_ROOT / "data" / "raw"
 BASE_URL = "https://opendata.paris.fr/api/explore/v2.1/catalog/datasets"
 
 
