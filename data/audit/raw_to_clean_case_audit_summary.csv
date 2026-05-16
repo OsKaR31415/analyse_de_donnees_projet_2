@@ -1,0 +1,10 @@
+﻿check,value,status
+raw_files_used_for_expected_cases,24,OK
+raw_files_skipped_for_expected_cases,0,OK
+expected_raw_candidate_cases,220404,INFO
+clean_long_cases,220404,INFO
+missing_from_clean,0,OK
+extra_in_clean,0,OK
+vote_value_mismatches,0,OK
+duplicate_clean_cases,0,OK
+duplicate_expected_cases,0,OK

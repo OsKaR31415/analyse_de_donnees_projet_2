@@ -1,42 +1,66 @@
 """
-Lire les datasets des élections législatives, européennes, présidentielles, régionales et
-municipales depuis 2000.
+Lire les datasets des élections législatives, européennes, présidentielles,
+régionales et municipales depuis 2000.
 """
-import pyarrow as pa
+
+from pathlib import Path
+import urllib.error
+
 import pandas as pd
-import urllib
-from os import path
+
+
+DATA_DIR = Path("data/raw")
+BASE_URL = "https://opendata.paris.fr/api/explore/v2.1/catalog/datasets"
 
 
 def get_datasets(force_download: bool = False) -> dict[str, pd.DataFrame]:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
     annees = range(2000, 2026)
     tours = ["1ertour", "2emetour"]
-    datasets_ids = [*(f"elections-legislatives-{annee}-{tour}"
-                      for tour in tours for annee in annees),
-                    *(f"elections-europeennes-{annee}" for annee in annees),
-                    *(f"elections-presidentielles-{annee}-{tour}"
-                      for tour in tours for annee in annees),
-                    *(f"elections-regionales-{annee}-{tour}"
-                      for tour in tours for annee in annees),
-                    *(f"elections-municipales-{annee}-{tour}"
-                      for tour in tours for annee in annees)]
+
+    datasets_ids = [
+        *(f"elections-legislatives-{annee}-{tour}" for tour in tours for annee in annees),
+        *(f"elections-europeennes-{annee}" for annee in annees),
+        *(f"elections-presidentielles-{annee}-{tour}" for tour in tours for annee in annees),
+        *(f"elections-regionales-{annee}-{tour}" for tour in tours for annee in annees),
+        *(f"elections-municipales-{annee}-{tour}" for tour in tours for annee in annees),
+    ]
+
     datasets: dict[str, pd.DataFrame] = {}
+
     for dataset_id in datasets_ids:
+        local_path = DATA_DIR / f"{dataset_id}.parquet"
+        url = f"{BASE_URL}/{dataset_id}/exports/parquet"
+
         try:
-            if force_reupload or not path.isfile(f"data/{dataset_id}"):
+            if force_download or not local_path.is_file():
                 print(f"downloading {dataset_id}...")
-                df = pd.read_parquet(f"https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/{dataset_id}/exports/parquet")
+                df = pd.read_parquet(url)
+
+                if not df.empty:
+                    df.to_parquet(local_path, index=False)
+                    print(f"saved to {local_path}")
+                else:
+                    print(f"empty dataset: {dataset_id}")
+                    continue
+
             else:
-                df = pd.read_parquet(f"data/{dataset_id}")
+                print(f"loading cached {dataset_id}...")
+                df = pd.read_parquet(local_path)
+
             if not df.empty:
-                print(dataset_id, ":")
-                print(df)
+                print(f"{dataset_id}: {df.shape[0]} rows, {df.shape[1]} columns")
                 datasets[dataset_id] = df
+
         except (urllib.error.HTTPError, urllib.error.URLError):
             pass
+
+        except Exception as exc:
+            print(f"failed {dataset_id}: {type(exc).__name__}: {exc}")
+
     return datasets
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     get_datasets()
-
-

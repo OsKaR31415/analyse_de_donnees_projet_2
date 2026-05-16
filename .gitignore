@@ -1,0 +1,15 @@
+
+# Local environment
+.venv/
+__pycache__/
+*.pyc
+
+# Raw/local downloaded data
+data/raw/
+data/raw_datagouv/
+data/interim/
+data/metadata/
+data/preview/
+
+# Local notebooks/cache/logs
+.ipynb_checkpoints/
