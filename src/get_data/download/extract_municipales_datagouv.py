@@ -1,4 +1,4 @@
-﻿"""
+﻿r"""
 extract_municipales_datagouv.py
 
 Extracts Paris municipal election results from the data.gouv.fr aggregated
