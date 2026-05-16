@@ -1,4 +1,4 @@
-"""
+﻿"""
 Clean non-municipal OpenData Paris election result files.
 
 Input:
@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 RAW_DIR = PROJECT_ROOT / "data" / "raw"
 CLEAN_DIR = PROJECT_ROOT / "data" / "clean"
 MANIFEST_DIR = PROJECT_ROOT / "data" / "manifest"
@@ -79,17 +79,17 @@ COLUMN_ALIASES = {
 }
 
 SCRUTIN_CORRECTIONS = {
-    "rã©guinales": "Régionales",
-    "réguinales": "Régionales",
-    "regionales": "Régionales",
-    "régionales": "Régionales",
-    "legislatives": "Législative",
-    "législatives": "Législative",
-    "presidentielles": "Présidentielle",
-    "présidentielles": "Présidentielle",
-    "présidentielle": "Présidentielle",
-    "europeennes": "Européennes",
-    "européennes": "Européennes",
+    "rÃ£Â©guinales": "RÃ©gionales",
+    "rÃ©guinales": "RÃ©gionales",
+    "regionales": "RÃ©gionales",
+    "rÃ©gionales": "RÃ©gionales",
+    "legislatives": "LÃ©gislative",
+    "lÃ©gislatives": "LÃ©gislative",
+    "presidentielles": "PrÃ©sidentielle",
+    "prÃ©sidentielles": "PrÃ©sidentielle",
+    "prÃ©sidentielle": "PrÃ©sidentielle",
+    "europeennes": "EuropÃ©ennes",
+    "europÃ©ennes": "EuropÃ©ennes",
 }
 
 NON_CANDIDATE_COLUMNS = {

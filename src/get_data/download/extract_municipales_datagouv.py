@@ -1,9 +1,9 @@
-"""
+﻿"""
 extract_municipales_datagouv.py
 
 Extracts Paris municipal election results from the data.gouv.fr aggregated
 parquet file and saves them as individual parquet files matching the existing
-pipeline schema (one file per election × tour).
+pipeline schema (one file per election Ã— tour).
 
 The pipeline cleaner (clean_election_results.py) expects wide-format files:
 one row per bureau de vote, one column per candidate.  This script therefore
@@ -24,10 +24,12 @@ import pathlib
 import numpy as np
 import pandas as pd
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# â”€â”€ Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-INPUT_PATH = pathlib.Path("data/raw_datagouv/datagouv_candidats_results.parquet")
-OUTPUT_DIR = pathlib.Path("data/raw")
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[3]
+
+INPUT_PATH = PROJECT_ROOT / "data" / "raw_datagouv" / "datagouv_candidats_results.parquet"
+OUTPUT_DIR = PROJECT_ROOT / "data" / "raw"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 MUNICIPAL_ELECTIONS = [
@@ -38,7 +40,7 @@ MUNICIPAL_ELECTIONS = [
 
 TOUR_LABEL = {"t1": "1ertour", "t2": "2emetour"}
 
-# Columns that identify a unique polling booth × election row in wide output.
+# Columns that identify a unique polling booth Ã— election row in wide output.
 # These become id_vars for the melt in the cleaner, so they must all be present
 # and must NOT look like vote columns.
 BOOTH_META_COLS = [
@@ -49,18 +51,18 @@ BOOTH_META_COLS = [
     "num_arrond",
     "num_bureau",
     "nb_inscr",     # back-calculated; NaN if ratio unavailable
-    "nb_votant",    # not recoverable without general-results file → NaN
+    "nb_votant",    # not recoverable without general-results file â†’ NaN
     "nb_exprim",    # back-calculated; required by drop_invalid_polling_rows
 ]
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def parse_id_election(id_election: str) -> dict:
-    """Parse '2020_muni_t1' → {annee: 2020, scrutin: 'Municipales', tour: 1}"""
+    """Parse '2020_muni_t1' â†’ {annee: 2020, scrutin: 'Municipales', tour: 1}"""
     try:
         parts = str(id_election).split("_")
         annee = int(parts[0])
-        tour = int(parts[2][1])   # 't1' → 1, 't2' → 2
+        tour = int(parts[2][1])   # 't1' â†’ 1, 't2' â†’ 2
         return {"annee": annee, "scrutin": "Municipales", "tour": tour}
     except Exception:
         return {"annee": None, "scrutin": "Municipales", "tour": None}
@@ -68,7 +70,7 @@ def parse_id_election(id_election: str) -> dict:
 
 def parse_code_bv(code_bv: str) -> dict:
     """
-    Parse '0101' → {num_arrond: 1, num_bureau: 1, id_bvote: '1-1'}
+    Parse '0101' â†’ {num_arrond: 1, num_bureau: 1, id_bvote: '1-1'}
     Paris bureaux de vote: first 2 digits = arrondissement, last 2 = bureau number.
     """
     code_bv = str(code_bv).zfill(4)
@@ -93,7 +95,7 @@ def recover_booth_totals(df: pd.DataFrame) -> pd.DataFrame:
     columns (ratio_voix_exprimes, ratio_voix_inscrits), which are percentages.
 
     Strategy: for each bureau, use the candidate-row estimate that minimises
-    rounding error — i.e. the candidate with the highest vote count, who
+    rounding error â€” i.e. the candidate with the highest vote count, who
     contributes the most signal.  We round to the nearest integer.
 
     nb_votant is not recoverable without the general-results file; left as NaN.
@@ -132,7 +134,7 @@ def recover_booth_totals(df: pd.DataFrame) -> pd.DataFrame:
     return df.merge(booth_totals, on=booth_key, how="left")
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def main():
     print(f"Loading {INPUT_PATH} ...")
@@ -146,11 +148,11 @@ def main():
 
     print(f"  Paris municipal rows found: {len(paris_munic):,}")
 
-    # Parse bureau de vote code → arrondissement, bureau, id_bvote
+    # Parse bureau de vote code â†’ arrondissement, bureau, id_bvote
     bv_parsed = paris_munic["code_bv"].apply(parse_code_bv).apply(pd.Series)
     paris_munic = pd.concat([paris_munic.reset_index(drop=True), bv_parsed], axis=1)
 
-    # Parse election ID → scrutin, annee, tour
+    # Parse election ID â†’ scrutin, annee, tour
     election_parsed = (
         paris_munic["id_election"].astype(str)
         .apply(parse_id_election)
@@ -164,15 +166,15 @@ def main():
     # Build candidate column name (used as the wide column header)
     paris_munic["candidate_col"] = paris_munic.apply(build_candidate_name, axis=1)
 
-    # Deduplicate: if the same bureau × candidate appears more than once, sum
+    # Deduplicate: if the same bureau Ã— candidate appears more than once, sum
     # (can happen if datagouv has list-level sub-rows)
     paris_munic["voix_num"] = pd.to_numeric(paris_munic["voix"], errors="coerce").fillna(0)
 
     paris_munic = paris_munic.dropna(subset=["id_bvote", "candidate_col"])
     paris_munic = paris_munic[paris_munic["candidate_col"].str.strip() != ""]
 
-    # ── Pivot to wide format ──────────────────────────────────────────────────
-    # One row per bureau × election, one column per candidate.
+    # â”€â”€ Pivot to wide format â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # One row per bureau Ã— election, one column per candidate.
     # This is exactly what clean_election_results.py expects.
 
     booth_meta = ["id_election", "id_bvote", "scrutin", "annee", "tour",
@@ -200,7 +202,7 @@ def main():
     # nb_votant is not recoverable without the general-results file
     wide["nb_votant"] = pd.NA
 
-    # ── Save one parquet file per election × tour ─────────────────────────────
+    # â”€â”€ Save one parquet file per election Ã— tour â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     for id_election in MUNICIPAL_ELECTIONS:
         subset = wide[wide["id_election"] == id_election].copy()
         subset = subset.drop(columns=["id_election"])
@@ -219,7 +221,7 @@ def main():
         n_candidates = len([c for c in subset.columns if c not in BOOTH_META_COLS])
         print(
             f"  Saved {fname}  "
-            f"({len(subset):,} booths × {n_candidates} candidate columns)"
+            f"({len(subset):,} booths Ã— {n_candidates} candidate columns)"
         )
 
     print()

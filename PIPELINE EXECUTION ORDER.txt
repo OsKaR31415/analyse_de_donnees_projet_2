@@ -1,0 +1,314 @@
+﻿PARIS ELECTION VALIDATION PIPELINE — RUN MANUAL
+================================================
+
+Repository:
+https://github.com/anthonyysaab/validation_pipeline_votes_2000-2026_paris_region.git
+
+Working branch:
+anthony/pipeline-validation
+
+Local project path:
+C:\Users\user\Documents\analyse_de_donnees_projet_2
+
+Python environment:
+Use the project virtual environment:
+
+.\.venv\Scripts\python.exe
+
+
+PROJECT STRUCTURE
+=================
+
+Pipeline scripts are organized under:
+
+src/get_data/
+
+Subfolders:
+
+src/get_data/download/
+    fetch_non_municipal_data.py
+    extract_municipales_datagouv.py
+
+src/get_data/clean/
+    clean_election_results.py
+    clean_municipal_results.py
+    build_clean_results.py
+
+src/get_data/validation/
+    validate_clean_election_results.py
+    inspect_validation_problems.py
+
+src/get_data/audit/
+    audit_raw_to_clean_cases.py
+
+src/get_data/inspect/
+    inspect_raw_datasets.py
+    verify_parquet_metadata.py
+
+
+FULL PIPELINE EXECUTION ORDER
+=============================
+
+Run every command from the project root:
+
+cd C:\Users\user\Documents\analyse_de_donnees_projet_2
+
+
+1. Fetch/cache OpenData Paris raw datasets
+------------------------------------------
+
+.\.venv\Scripts\python.exe .\src\get_data\download\fetch_non_municipal_data.py
+
+Output:
+- data/raw/*.parquet
+
+Notes:
+- The script checks many possible election/year/tour combinations.
+- Many attempted downloads are expected to be empty or unavailable.
+- Successful files are cached under data/raw.
+
+
+2. Extract municipal data from data.gouv aggregate file
+-------------------------------------------------------
+
+.\.venv\Scripts\python.exe .\src\get_data\download\extract_municipales_datagouv.py
+
+Input:
+- data/raw_datagouv/datagouv_candidats_results.parquet
+
+Output target:
+- data/raw/elections-municipales-YYYY-1ertour.parquet
+- data/raw/elections-municipales-YYYY-2emetour.parquet
+
+Notes:
+- This script attempts to rebuild municipal raw parquet files from the data.gouv aggregate file.
+- In the latest successful run, it found 29,991 Paris municipal rows but printed warnings for the six municipal election IDs.
+- The pipeline still succeeded because the municipal raw parquet files already existed in data/raw.
+
+
+3. Clean non-municipal election files
+-------------------------------------
+
+.\.venv\Scripts\python.exe .\src\get_data\clean\clean_election_results.py
+
+Input:
+- data/raw/*.parquet
+- excluding elections-municipales-*.parquet
+
+Outputs:
+- data/clean/election_results_non_municipal_long.parquet
+- data/manifest/cleaning_report_non_municipal.csv
+
+Latest successful run:
+- 190,413 cleaned non-municipal rows
+
+
+4. Clean municipal election files
+---------------------------------
+
+.\.venv\Scripts\python.exe .\src\get_data\clean\clean_municipal_results.py
+
+Input:
+- data/raw/elections-municipales-*.parquet
+
+Outputs:
+- data/clean/election_results_municipal_long.parquet
+- data/manifest/cleaning_report_municipal.csv
+
+Latest successful run:
+- 29,991 cleaned municipal rows
+
+
+5. Build final combined clean outputs
+-------------------------------------
+
+.\.venv\Scripts\python.exe .\src\get_data\clean\build_clean_results.py
+
+Inputs:
+- data/clean/election_results_non_municipal_long.parquet
+- data/clean/election_results_municipal_long.parquet
+
+Outputs:
+- data/clean/election_results_long.parquet
+- data/clean/election_results_wide_vote_share.parquet
+- data/manifest/cleaning_report.csv
+
+Latest successful run:
+- Final long table: 220,404 rows × 30 columns
+- Final wide table: 19,748 rows × 638 columns
+
+
+6. Validate final clean outputs
+-------------------------------
+
+.\.venv\Scripts\python.exe .\src\get_data\validation\validate_clean_election_results.py
+
+Inputs:
+- data/clean/election_results_long.parquet
+- data/clean/election_results_wide_vote_share.parquet
+- data/manifest/cleaning_report.csv
+
+Outputs:
+- data/validation/validation_summary.csv
+- data/validation/row_count_validation.csv
+- data/validation/per_booth_vote_checks.csv
+- data/validation/expressed_vote_mismatches.csv
+- data/validation/municipal_row_checks.csv
+- data/validation/suspicious_candidate_columns.csv
+- data/validation/clean_sample.csv
+
+Latest successful run:
+- long_table_exists: OK
+- wide_table_exists: OK
+- row_count_problems: 0 OK
+- municipal rows: OK
+- suspicious_candidate_columns: 0 OK
+- error_files_in_cleaning_report: 0 OK
+
+Known source-data CHECKs:
+- source_expressed_vote_mismatches: 2 CHECK
+- source_vote_share_sum_mismatches: 1 CHECK
+
+These are source consistency checks, not extraction failures.
+The mismatches are in elections-presidentielles-2017-1ertour:
+- bureau 12-8: nb_exprim 1155, candidate sum 1177, diff +22
+- bureau 13-21: nb_exprim 1228, candidate sum 1227, diff -1
+
+
+7. Run strict raw-to-clean audit
+--------------------------------
+
+.\.venv\Scripts\python.exe .\src\get_data\audit\audit_raw_to_clean_cases.py
+
+Inputs:
+- data/raw/**/*.parquet
+- data/clean/election_results_long.parquet
+
+Outputs:
+- data/audit/raw_to_clean_case_audit_summary.csv
+- data/audit/raw_to_clean_case_audit_problems.csv
+
+Latest successful final audit:
+- raw_files_used_for_expected_cases: 24 OK
+- raw_files_skipped_for_expected_cases: 0 OK
+- expected_raw_candidate_cases: 220,404
+- clean_long_cases: 220,404
+- missing_from_clean: 0 OK
+- extra_in_clean: 0 OK
+- vote_value_mismatches: 0 OK
+- duplicate_clean_cases: 0 OK
+- duplicate_expected_cases: 0 OK
+
+
+OPTIONAL INSPECTION / METADATA CHECKS
+=====================================
+
+Run these after the main pipeline.
+
+
+A. Inspect raw dataset schemas
+------------------------------
+
+.\.venv\Scripts\python.exe .\src\get_data\inspect\inspect_raw_datasets.py
+
+Outputs:
+- data/manifest/raw_schema_report.csv
+- data/preview/
+
+Latest successful run:
+- 24 raw parquet files inspected
+- schema report written successfully
+
+
+B. Verify Parquet metadata
+--------------------------
+
+.\.venv\Scripts\python.exe .\src\get_data\inspect\verify_parquet_metadata.py
+
+Outputs:
+- data/metadata/parquet_file_metadata.csv
+- data/metadata/parquet_column_metadata.csv
+- data/metadata/metadata_validation_summary.csv
+- data/metadata/metadata_validation_problems.csv
+
+Latest successful run:
+- raw_parquet_files_found: 24 OK
+- file_metadata_rows: 26 OK
+- column_metadata_rows: 1312 OK
+- raw_candidate_vote_columns_detected: 251 OK
+- technical_columns_detected_as_candidates: 0 OK
+- metadata_validation_problems: 0 OK
+
+
+C. Inspect validation problems
+------------------------------
+
+.\.venv\Scripts\python.exe .\src\get_data\validation\inspect_validation_problems.py
+
+Purpose:
+- Prints suspicious candidate columns if any.
+- Prints expressed-vote mismatches.
+- Prints candidate columns detected per cleaned file.
+- Inspects votes for suspicious candidates.
+
+Latest successful run:
+- No suspicious candidate columns.
+- Two source-data expressed-vote mismatches found in Présidentielle 2017 first round.
+- No suspicious candidates to inspect.
+
+
+SHORT RUN ORDER
+===============
+
+Use this when raw data already exists:
+
+.\.venv\Scripts\python.exe .\src\get_data\clean\clean_election_results.py
+.\.venv\Scripts\python.exe .\src\get_data\clean\clean_municipal_results.py
+.\.venv\Scripts\python.exe .\src\get_data\clean\build_clean_results.py
+.\.venv\Scripts\python.exe .\src\get_data\validation\validate_clean_election_results.py
+.\.venv\Scripts\python.exe .\src\get_data\audit\audit_raw_to_clean_cases.py
+.\.venv\Scripts\python.exe .\src\get_data\inspect\verify_parquet_metadata.py
+.\.venv\Scripts\python.exe .\src\get_data\validation\inspect_validation_problems.py
+
+
+SUCCESS CRITERIA
+================
+
+The pipeline is considered successful when:
+
+1. build_clean_results.py writes:
+   - data/clean/election_results_long.parquet
+   - data/clean/election_results_wide_vote_share.parquet
+
+2. validate_clean_election_results.py reports:
+   - long_table_exists OK
+   - wide_table_exists OK
+   - row_count_problems 0 OK
+   - suspicious_candidate_columns 0 OK
+   - error_files_in_cleaning_report 0 OK
+
+3. audit_raw_to_clean_cases.py reports:
+   - missing_from_clean 0 OK
+   - extra_in_clean 0 OK
+   - vote_value_mismatches 0 OK
+   - duplicate_clean_cases 0 OK
+   - duplicate_expected_cases 0 OK
+
+4. verify_parquet_metadata.py reports:
+   - metadata_validation_problems 0 OK
+
+
+LATEST VERIFIED SUCCESSFUL RUN
+==============================
+
+Latest verified run after moving scripts into src/get_data:
+
+- Non-municipal long table: 190,413 rows
+- Municipal long table: 29,991 rows
+- Final long table: 220,404 rows
+- Final wide table: 19,748 rows × 638 columns
+- Raw files used in strict audit: 24
+- Raw-to-clean audit: fully OK
+- Metadata validation: fully OK
+
+The only remaining validation CHECKs are source-data inconsistencies in Présidentielle 2017 first round, not pipeline errors.
