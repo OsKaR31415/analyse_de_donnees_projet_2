@@ -1,5 +1,4 @@
 """Matrix factorization utilities for the election analysis report.
-
 The project stores cleaned election results in a wide table where one row is a
 polling station in one election and candidate/list vote shares are columns. This
 module keeps the PCA/SVD and CCA computations reusable from both scripts and
@@ -83,7 +82,6 @@ def election_matrix(
     min_total_share: float = 0.002,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return metadata and candidate vote-share matrix for one election.
-
     Candidate columns that are zero everywhere for the selected election are
     removed. A small total-share threshold also removes one-off lists that add
     little signal but can make the PCA loading plot unreadable.
