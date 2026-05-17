@@ -1,5 +1,5 @@
 ---
-title: 
+title: "Paris Election Results: Matrix Factorization Analysis"
 author:
   - "Oscar Plaisant"
   - "Anthony Saab"
@@ -13,18 +13,19 @@ execute:
   message: false
 ---
 
-## III- SVD
-
 ```{python}
 #| label: setup
 from pathlib import Path
 import sys
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+
 PROJECT_ROOT = Path.cwd()
 sys.path.append(str(PROJECT_ROOT / "src"))
+
 from matrix_factorization import (
     arrondissement_component_summary,
     available_elections,
@@ -33,26 +34,24 @@ from matrix_factorization import (
     pca_svd,
     strongest_loadings,
 )
+
 wide = load_wide_results(PROJECT_ROOT / "data" / "clean" / "csv" / "election_results_wide_vote_share.csv")
 ```
+
 ## Objective
+
 The cleaned table used here has one row per polling station and election round, and one numeric column per candidate or list. Values are vote shares among expressed votes, which makes polling stations of different sizes comparable.
-The goal is data analysis rather than political interpretation. PCA/SVD is used to describe the main directions of variation inside an election, and CCA is used to compare the geometry of two different elections on the polling stations that they have in common.
+PCA/SVD is used to describe the main directions of variation inside an election, and CCA is used to compare the geometry of two different elections on the polling stations that they have in common.
 ```{python}
 #| label: elections-overview
 available_elections(wide)
 ```
+
 ## Method
-For a selected election, let \(X\) be the matrix:
-- rows: polling stations;
-- columns: candidates or lists;
-- values: vote shares among expressed votes.
-Each candidate/list column is centered and scaled. PCA is then computed by singular value decomposition:
-\[
-X = U \Sigma V^\top
-\]
-The polling-station coordinates are given by \(U\Sigma\), and the candidate/list loadings are given by \(V\). This is useful because it separates two questions: which polling stations look similar, and which candidates/lists define the main axes of variation.
+For a selected election, let $X$ be a matrix where rows represent polling stations, columns represent candidates or lists, and values are vote shares among expressed votes. Because these shares inherently sum to 100% for each station, $X$ consists of compositional data where variables are intrinsically negatively correlated; mathematically, if one candidate gains a share, the others must inherently lose. While specialized techniques like Centered Log-Ratio (CLR) transformations exist for navigating this strict compositional geometry, standard Principal Component Analysis (PCA) on centered and scaled candidate columns remains a robust, widely accepted baseline for describing the principal directions of variance. This PCA is computed via singular value decomposition, expressed as$$X = U \Sigma V^\top$$By extracting the polling-station coordinates from $U\Sigma$ and the candidate loadings from $V$, this approach effectively separates two key analytical questions: which polling stations exhibit similar voting patterns, and which candidates or lists define the main axes of political variation.
+
 ## PCA/SVD On Several Elections
+
 ```{python}
 #| label: pca-compute
 PCA_ELECTIONS = [
@@ -61,21 +60,261 @@ PCA_ELECTIONS = [
     "elections-europeennes-2024",
     "elections-regionales-2021-1ertour",
 ]
-pca_results = {dataset_id: pca_svd(wide, dataset_id, n_components=4) for dataset_id in PCA_ELECTIONS}
+
+# Computed with 10 components to allow for a proper scree plot
+pca_results = {dataset_id: pca_svd(wide, dataset_id, n_components=10) for dataset_id in PCA_ELECTIONS}
+
 variance_rows = []
 for dataset_id, result in pca_results.items():
-    top = result.explained_variance_ratio.head(4).copy()
+    top = result.explained_variance_ratio.copy()
     top["dataset_id"] = dataset_id
     variance_rows.append(top)
+
 variance_summary = pd.concat(variance_rows, ignore_index=True)
 variance_summary[
     ["dataset_id", "component", "explained_variance_ratio", "cumulative_variance_ratio"]
-]
+].head(8)
 ```
-The first components explain a visible share of the variation, but not all of it. This is expected because a polling station is described by several candidate/list shares, and the vote-share columns are compositional. PCA still gives a useful low-dimensional view, but the first two axes should be read as a summary rather than as the whole structure.
+
+The first components explain a visible share of the variation, but not all of it. This is expected, because a polling station is described by several candidate/list shares, and the vote-share columns are compositional. PCA still gives a useful low-dimensional view, but the first two axes should be read as a summary rather than as the whole structure.
+
 ```{python}
 #| label: pca-variance-plot
-fig = px.bar(
+fig = px.line(
     variance_summary,
     x="component",
     y="explained_variance_ratio",
+    color="dataset_id",
+    markers=True,
+    title="Scree Plot: Explained Variance by PCA Component",
+    labels={
+        "component": "Principal Component",
+        "explained_variance_ratio": "Variance Ratio",
+        "dataset_id": "Election",
+    },
+)
+fig.update_layout(
+    legend_title_text="Election", 
+    yaxis=dict(tickformat=".1%")
+)
+fig.show()
+```
+The scree plot above illustrates the rate of decay in explained variance. A steep drop followed by a flattening out (the "elbow") typically indicates the optimal number of dimensions to retain. The gradual decay seen here reinforces that the vote-share structure is complex and cannot be perfectly reduced to just two dimensions.
+```{python}
+#| label: pca-score-plots
+for dataset_id, result in pca_results.items():
+    var = result.explained_variance_ratio.set_index("component")["explained_variance_ratio"]
+    fig = px.scatter(
+        result.scores,
+        x="PC1",
+        y="PC2",
+        color="num_arrond",
+        hover_data=["id_bvote", "num_bureau", "nb_exprim"],
+        title=f"PCA polling-station scores: {dataset_id}",
+        labels={
+            "PC1": f"PC1 ({var.loc['PC1']:.1%})",
+            "PC2": f"PC2 ({var.loc['PC2']:.1%})",
+            "num_arrond": "Arrondissement",
+        },
+    )
+    fig.update_traces(marker=dict(size=7, opacity=0.75))
+    fig.show()
+```
+These scatter plots show whether polling stations form a single cloud or whether some stations are separated from the majority. Coloring by arrondissement is not used as a causal explanation; it is only a convenient way to check whether the numerical structure has a spatial component.
+
+### Candidate/List Loadings
+
+```{python}
+#| label: pca-loadings
+for dataset_id, result in pca_results.items():
+    top_pc1 = strongest_loadings(result.loadings, "PC1", n=10).assign(component="PC1")
+    top_pc2 = strongest_loadings(result.loadings, "PC2", n=10).assign(component="PC2")
+    top = pd.concat([top_pc1, top_pc2], ignore_index=True)
+    top["loading"] = np.where(top["component"] == "PC1", top["PC1"], top["PC2"])
+    fig = px.bar(
+        top,
+        x="candidate",
+        y="loading",
+        color="component",
+        facet_row="component",
+        title=f"Strongest candidate/list loadings: {dataset_id}",
+        labels={"candidate": "Candidate/list", "loading": "Loading"},
+    )
+    fig.update_xaxes(tickangle=45)
+    fig.update_layout(showlegend=False, height=650)
+    fig.show()
+```
+
+The loading plots identify which candidate/list columns define the PCA axes. A positive or negative loading is not a judgment about the candidate: it means that this column contributes strongly to a direction of statistical variation between polling stations.
+## Arrondissement-Level Spatial Summary
+
+The repository does not contain a polling-station or arrondissement geometry file. To keep the analysis reproducible without downloading external geographic data, the PCA coordinates are aggregated by arrondissement and displayed as a compact arrondissement tile choropleth. If a Paris GeoJSON is added later, the same num_arrond, PC1, and PC2 summaries can be joined to real polygons.
+```{python}
+#| label: arrondissement-tile-data
+tile_positions = pd.DataFrame(
+    [
+        (1, 4, 3), (2, 4, 2), (3, 5, 2), (4, 5, 3),
+        (5, 5, 4), (6, 4, 4), (7, 3, 4), (8, 3, 2),
+        (9, 4, 1), (10, 5, 1), (11, 6, 2), (12, 6, 4),
+        (13, 5, 5), (14, 4, 5), (15, 3, 5), (16, 2, 4),
+        (17, 2, 2), (18, 3, 1), (19, 6, 1), (20, 6, 3),
+    ],
+    columns=["num_arrond", "tile_x", "tile_y"],
+)
+
+spatial_summaries = []
+for dataset_id, result in pca_results.items():
+    summary = arrondissement_component_summary(result.scores)
+    summary["dataset_id"] = dataset_id
+    spatial_summaries.append(summary)
+
+spatial_summary = pd.concat(spatial_summaries, ignore_index=True).merge(tile_positions, on="num_arrond", how="left")
+spatial_summary.head()
+```
+
+```{python}
+#| label: arrondissement-tile-map
+tile_geojson = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {"num_arrond": int(row.num_arrond)},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[
+                    [row.tile_x - 0.48, row.tile_y - 0.48],
+                    [row.tile_x + 0.48, row.tile_y - 0.48],
+                    [row.tile_x + 0.48, row.tile_y + 0.48],
+                    [row.tile_x - 0.48, row.tile_y + 0.48],
+                    [row.tile_x - 0.48, row.tile_y - 0.48],
+                ]],
+            },
+        }
+        for row in tile_positions.itertuples(index=False)
+    ],
+}
+
+for dataset_id in PCA_ELECTIONS:
+    data = spatial_summary.loc[spatial_summary["dataset_id"] == dataset_id]
+    fig = px.choropleth(
+        data,
+        geojson=tile_geojson,
+        locations="num_arrond",
+        featureidkey="properties.num_arrond",
+        color="PC1",
+        color_continuous_scale="RdBu",
+        title=f"Arrondissement tile choropleth of mean PC1: {dataset_id}",
+        hover_data=["PC1", "PC2", "polling_stations", "mean_registered"],
+        labels={"PC1": "Mean PC1", "num_arrond": "Arrondissement"},
+    )
+    fig.update_geos(fitbounds="locations", visible=False)
+    fig.update_layout(height=500, margin=dict(l=0, r=0, t=60, b=0))
+    for row in data.itertuples(index=False):
+        fig.add_trace(
+            go.Scattergeo(
+                lon=[row.tile_x],
+                lat=[row.tile_y],
+                mode="text",
+                text=[str(int(row.num_arrond))],
+                textfont=dict(color="black", size=12),
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+    fig.show()
+```
+The spatial summaries help detect whether some arrondissements have systematically higher or lower coordinates on the first PCA axis. This is a descriptive signal: it says that polling stations in those arrondissements are positioned differently in the vote-share matrix, not why this happens.
+
+## CCA Between Different Elections
+
+PCA describes one election at a time. Canonical Correlation Analysis compares two elections by finding linear combinations of candidates/lists in election A and election B that are maximally correlated across the same polling stations.
+
+Two comparisons are used:
+
+- presidential second rounds, 2017 vs 2022;
+- European elections, 2019 vs 2024.
+
+```{python}
+#| label: cca-compute
+CCA_PAIRS = [
+    ("elections-presidentielles-2017-2emetour", "elections-presidentielles-2022-2emetour"),
+    ("elections-europeennes-2019", "elections-europeennes-2024"),
+]
+
+cca_results = {
+    pair: cca_compare(wide, pair[0], pair[1], n_components=3)
+    for pair in CCA_PAIRS
+}
+
+cca_summary = []
+for (left, right), result in cca_results.items():
+    part = result.correlations.copy()
+    part["left_election"] = left
+    part["right_election"] = right
+    part["common_polling_stations"] = len(result.joined_scores)
+    cca_summary.append(part)
+
+pd.concat(cca_summary, ignore_index=True)[
+    ["left_election", "right_election", "common_polling_stations", "component", "canonical_correlation"]
+]
+```
+
+```{python}
+#| label: cca-score-plots
+for (left, right), result in cca_results.items():
+    fig = px.scatter(
+        result.joined_scores,
+        x="CC1_left",
+        y="CC1_right",
+        color="num_arrond",
+        hover_data=["id_bvote"],
+        title=f"CCA first canonical variates: {left} vs {right}",
+        labels={
+            "CC1_left": f"{left} canonical variate 1",
+            "CC1_right": f"{right} canonical variate 1",
+            "num_arrond": "Arrondissement",
+        },
+    )
+    fig.update_traces(marker=dict(size=7, opacity=0.75))
+    fig.show()
+```
+
+```{python}
+#| label: cca-weights
+for (left, right), result in cca_results.items():
+    left_top = (
+        result.x_weights[["candidate", "CC1"]]
+        .assign(abs_weight=lambda d: d["CC1"].abs(), election=left)
+        .sort_values("abs_weight", ascending=False)
+        .head(8)
+    )
+    right_top = (
+        result.y_weights[["candidate", "CC1"]]
+        .assign(abs_weight=lambda d: d["CC1"].abs(), election=right)
+        .sort_values("abs_weight", ascending=False)
+        .head(8)
+    )
+    top = pd.concat([left_top, right_top], ignore_index=True)
+    fig = px.bar(
+        top,
+        x="candidate",
+        y="CC1",
+        color="election",
+        title=f"Strongest CCA weights on CC1: {left} vs {right}",
+        labels={"candidate": "Candidate/list", "CC1": "CCA weight"},
+    )
+    fig.update_xaxes(tickangle=45)
+    fig.show()
+```
+
+High canonical correlations indicate that the two elections share a similar polling-station structure: a combination of candidate/list vote shares in one election predicts a combination in the other. Lower later components show that only part of the structure is stable across elections.
+When observing the canonical correlations in the table above, the most critical data-analytic insight is the rate of decay between CC1, CC2, and CC3. If the correlation for CC1 is high but CC2 drops precipitously, it mathematically implies that the two elections share primarily one major geometric axis of variation. Any secondary or tertiary structures in the polling stations are highly specific to the individual elections and do not map cleanly onto one another.
+
+## Conclusion
+
+PCA/SVD gives a compact description of within-election variation. The score plots summarize polling-station similarities, while loading plots show which candidate/list columns define the principal axes. The arrondissement summaries show that some of this numerical structure has a spatial pattern, although the available project data does not include official geometries for a true polygon map.
+
+CCA adds the cross-election comparison requested in the assignment. By joining elections on polling-station id, it measures whether different elections share a common vote-share geometry. The presidential second-round comparison is especially direct because both matrices have two candidate columns, while the European comparison is higher-dimensional and captures relationships between lists rather than one-to-one candidate continuity.
+
+The main limitation is that candidate sets change from one election to another. For this reason, the analysis compares statistical structures, not named political trajectories. The results should therefore be read as matrix analysis of polling-station vote-share profiles.
