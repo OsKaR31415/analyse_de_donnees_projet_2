@@ -1,19 +1,11 @@
 
-all: report presentation
-
+all: report
 .PHONY: report.py
-
-report.py:  # update report.py according to contents of report.ipynb
+report.py:  
 	jupyter nbconvert --to python --no-prompt --stdout report.ipynb | grep -v "^#|" > report.py
-
-report: report.py
+report:
 	quarto render report.qmd
-	echo "\007"  # ring bell at end of rendering
-
+	echo "\007" 
 presentation:
 	quarto render presentation.qmd
-	echo "\007"  # ring bell at end of rendering
-
-
-
-
+	echo "\007" 
