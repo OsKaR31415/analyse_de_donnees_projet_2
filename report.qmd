@@ -1,0 +1,81 @@
+---
+title: 
+author:
+  - "Oscar Plaisant"
+  - "Anthony Saab"
+  - "Yousra Tersi"
+format:
+  html:
+    toc: true
+    code-fold: true
+execute:
+  warning: false
+  message: false
+---
+
+## III- SVD
+
+```{python}
+#| label: setup
+from pathlib import Path
+import sys
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+PROJECT_ROOT = Path.cwd()
+sys.path.append(str(PROJECT_ROOT / "src"))
+from matrix_factorization import (
+    arrondissement_component_summary,
+    available_elections,
+    cca_compare,
+    load_wide_results,
+    pca_svd,
+    strongest_loadings,
+)
+wide = load_wide_results(PROJECT_ROOT / "data" / "clean" / "csv" / "election_results_wide_vote_share.csv")
+```
+## Objective
+The cleaned table used here has one row per polling station and election round, and one numeric column per candidate or list. Values are vote shares among expressed votes, which makes polling stations of different sizes comparable.
+The goal is data analysis rather than political interpretation. PCA/SVD is used to describe the main directions of variation inside an election, and CCA is used to compare the geometry of two different elections on the polling stations that they have in common.
+```{python}
+#| label: elections-overview
+available_elections(wide)
+```
+## Method
+For a selected election, let \(X\) be the matrix:
+- rows: polling stations;
+- columns: candidates or lists;
+- values: vote shares among expressed votes.
+Each candidate/list column is centered and scaled. PCA is then computed by singular value decomposition:
+\[
+X = U \Sigma V^\top
+\]
+The polling-station coordinates are given by \(U\Sigma\), and the candidate/list loadings are given by \(V\). This is useful because it separates two questions: which polling stations look similar, and which candidates/lists define the main axes of variation.
+## PCA/SVD On Several Elections
+```{python}
+#| label: pca-compute
+PCA_ELECTIONS = [
+    "elections-presidentielles-2017-1ertour",
+    "elections-presidentielles-2022-2emetour",
+    "elections-europeennes-2024",
+    "elections-regionales-2021-1ertour",
+]
+pca_results = {dataset_id: pca_svd(wide, dataset_id, n_components=4) for dataset_id in PCA_ELECTIONS}
+variance_rows = []
+for dataset_id, result in pca_results.items():
+    top = result.explained_variance_ratio.head(4).copy()
+    top["dataset_id"] = dataset_id
+    variance_rows.append(top)
+variance_summary = pd.concat(variance_rows, ignore_index=True)
+variance_summary[
+    ["dataset_id", "component", "explained_variance_ratio", "cumulative_variance_ratio"]
+]
+```
+The first components explain a visible share of the variation, but not all of it. This is expected because a polling station is described by several candidate/list shares, and the vote-share columns are compositional. PCA still gives a useful low-dimensional view, but the first two axes should be read as a summary rather than as the whole structure.
+```{python}
+#| label: pca-variance-plot
+fig = px.bar(
+    variance_summary,
+    x="component",
+    y="explained_variance_ratio",
