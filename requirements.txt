@@ -4,3 +4,4 @@ pyarrow
 plotly
 jupyter
 jupyter-cache
+nbformat
